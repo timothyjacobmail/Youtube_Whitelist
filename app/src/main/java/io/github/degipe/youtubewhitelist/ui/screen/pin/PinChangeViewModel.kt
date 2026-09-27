@@ -34,25 +34,22 @@ class PinChangeViewModel @Inject constructor(
     private var oldPin: String = ""
     private var newPin: String = ""
 
-    fun onDigitEntered(digit: Int) {
+    fun onPasswordChanged(value: String) {
         _uiState.update { state ->
-            if (state.pin.length < MAX_PIN_LENGTH) {
-                state.copy(pin = state.pin + digit, error = null)
+            if (value.length <= MAX_PIN_LENGTH) {
+                state.copy(pin = value, error = null)
             } else {
                 state
             }
         }
     }
 
-    fun onBackspace() {
-        _uiState.update { state ->
-            state.copy(pin = state.pin.dropLast(1), error = null)
-        }
-    }
-
     fun onSubmit() {
         val state = _uiState.value
-        if (state.pin.length < MIN_PIN_LENGTH) return
+        if (state.pin.length < MIN_PIN_LENGTH) {
+            _uiState.update { it.copy(error = "Password must be at least $MIN_PIN_LENGTH characters.") }
+            return
+        }
 
         when (state.step) {
             PinChangeStep.VERIFY_OLD -> verifyOldPin(state.pin)
@@ -77,7 +74,7 @@ class PinChangeViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             pin = "",
-                            error = "Incorrect PIN. ${result.attemptsRemaining} attempts remaining."
+                            error = "Incorrect password. ${result.attemptsRemaining} attempts remaining."
                         )
                     }
                 }
@@ -102,7 +99,7 @@ class PinChangeViewModel @Inject constructor(
                 it.copy(
                     step = PinChangeStep.ENTER_NEW,
                     pin = "",
-                    error = "PINs do not match. Try again."
+                    error = "Passwords do not match. Try again."
                 )
             }
             return
@@ -113,13 +110,13 @@ class PinChangeViewModel @Inject constructor(
             if (result == PinVerificationResult.Success) {
                 _uiState.update { it.copy(isComplete = true) }
             } else {
-                _uiState.update { it.copy(pin = "", error = "Failed to change PIN.") }
+                _uiState.update { it.copy(pin = "", error = "Failed to change password.") }
             }
         }
     }
 
     companion object {
-        private const val MIN_PIN_LENGTH = 4
-        private const val MAX_PIN_LENGTH = 6
+        const val MIN_PIN_LENGTH = 6
+        const val MAX_PIN_LENGTH = 64
     }
 }

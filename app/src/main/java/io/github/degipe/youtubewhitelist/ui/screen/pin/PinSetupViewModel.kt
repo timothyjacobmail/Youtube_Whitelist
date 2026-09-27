@@ -30,19 +30,13 @@ class PinSetupViewModel @Inject constructor(
 
     private var firstPin: String = ""
 
-    fun onDigitEntered(digit: Int) {
+    fun onPasswordChanged(value: String) {
         _uiState.update { state ->
-            if (state.pin.length < MAX_PIN_LENGTH) {
-                state.copy(pin = state.pin + digit, error = null)
+            if (value.length <= MAX_PIN_LENGTH) {
+                state.copy(pin = value, error = null)
             } else {
                 state
             }
-        }
-    }
-
-    fun onBackspace() {
-        _uiState.update { state ->
-            state.copy(pin = state.pin.dropLast(1), error = null)
         }
     }
 
@@ -51,7 +45,7 @@ class PinSetupViewModel @Inject constructor(
         when (state.step) {
             PinSetupStep.ENTER_NEW -> {
                 if (state.pin.length < MIN_PIN_LENGTH) {
-                    _uiState.update { it.copy(error = "PIN must be at least $MIN_PIN_LENGTH digits") }
+                    _uiState.update { it.copy(error = "Password must be at least $MIN_PIN_LENGTH characters") }
                     return
                 }
                 firstPin = state.pin
@@ -64,7 +58,7 @@ class PinSetupViewModel @Inject constructor(
                         it.copy(
                             step = PinSetupStep.ENTER_NEW,
                             pin = "",
-                            error = "PINs do not match. Try again."
+                            error = "Passwords do not match. Try again."
                         )
                     }
                     return
@@ -78,7 +72,7 @@ class PinSetupViewModel @Inject constructor(
     }
 
     companion object {
-        const val MIN_PIN_LENGTH = 4
-        const val MAX_PIN_LENGTH = 6
+        const val MIN_PIN_LENGTH = 6
+        const val MAX_PIN_LENGTH = 64
     }
 }

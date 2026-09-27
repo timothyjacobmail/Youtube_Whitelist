@@ -29,19 +29,13 @@ class PinEntryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(PinEntryUiState())
     val uiState: StateFlow<PinEntryUiState> = _uiState.asStateFlow()
 
-    fun onDigitEntered(digit: Int) {
+    fun onPasswordChanged(value: String) {
         _uiState.update { state ->
-            if (state.pin.length < MAX_PIN_LENGTH) {
-                state.copy(pin = state.pin + digit, error = null)
+            if (value.length <= MAX_PIN_LENGTH) {
+                state.copy(pin = value, error = null)
             } else {
                 state
             }
-        }
-    }
-
-    fun onBackspace() {
-        _uiState.update { state ->
-            state.copy(pin = state.pin.dropLast(1), error = null)
         }
     }
 
@@ -58,7 +52,7 @@ class PinEntryViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(
                             pin = "",
-                            error = "Incorrect PIN. ${result.attemptsRemaining} attempts remaining.",
+                            error = "Incorrect password. ${result.attemptsRemaining} attempts remaining.",
                             attemptsRemaining = result.attemptsRemaining
                         )
                     }
@@ -78,7 +72,7 @@ class PinEntryViewModel @Inject constructor(
     }
 
     companion object {
-        private const val MIN_PIN_LENGTH = 4
-        private const val MAX_PIN_LENGTH = 6
+        private const val MIN_PIN_LENGTH = 6
+        private const val MAX_PIN_LENGTH = 64
     }
 }
