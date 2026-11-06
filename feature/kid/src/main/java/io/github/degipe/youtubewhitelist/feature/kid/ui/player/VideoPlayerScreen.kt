@@ -35,8 +35,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Card
@@ -48,13 +50,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +74,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import coil.compose.AsyncImage
 import io.github.degipe.youtubewhitelist.core.data.model.WhitelistItem
 
@@ -82,6 +90,11 @@ fun VideoPlayerScreen(
     val activity = LocalContext.current as? Activity
     var fullscreenView by remember { mutableStateOf<View?>(null) }
     var fullscreenCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
+    // Integer tenths avoid floating-point drift after repeated +/- taps.
+    var speedTenths by rememberSaveable { mutableIntStateOf(10) }
+    val supportsCustomSpeed = remember {
+        WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
+    }
 
     val exitFullscreen: () -> Unit = {
         fullscreenView?.let { view ->
@@ -168,36 +181,39 @@ fun VideoPlayerScreen(
                     }
 
                     // YouTube Player WebView
-                    YouTubePlayer(
-                        youtubeId = uiState.youtubeId,
-                        shouldPause = uiState.isSleepTimerExpired || uiState.isTimeLimitReached,
-                        onVideoEnded = { viewModel.playNext() },
-                        onEmbedError = { viewModel.playNext() },
-                        onEnterFullscreen = { view, callback ->
-                            fullscreenView = view
-                            fullscreenCallback = callback
-                            activity?.let { act ->
-                                view.setBackgroundColor(android.graphics.Color.BLACK)
-                                (act.window.decorView as? FrameLayout)?.addView(
-                                    view,
-                                    FrameLayout.LayoutParams(
-                                        FrameLayout.LayoutParams.MATCH_PARENT,
-                                        FrameLayout.LayoutParams.MATCH_PARENT
+                    key(uiState.youtubeId) {
+                        YouTubePlayer(
+                            youtubeId = uiState.youtubeId,
+                            playbackSpeed = speedTenths / 10.0,
+                            shouldPause = uiState.isSleepTimerExpired || uiState.isTimeLimitReached,
+                            onVideoEnded = { viewModel.playNext() },
+                            onEmbedError = { viewModel.playNext() },
+                            onEnterFullscreen = { view, callback ->
+                                fullscreenView = view
+                                fullscreenCallback = callback
+                                activity?.let { act ->
+                                    view.setBackgroundColor(android.graphics.Color.BLACK)
+                                    (act.window.decorView as? FrameLayout)?.addView(
+                                        view,
+                                        FrameLayout.LayoutParams(
+                                            FrameLayout.LayoutParams.MATCH_PARENT,
+                                            FrameLayout.LayoutParams.MATCH_PARENT
+                                        )
                                     )
-                                )
-                                act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                                WindowCompat.setDecorFitsSystemWindows(act.window, false)
-                                WindowInsetsControllerCompat(act.window, act.window.decorView).apply {
-                                    hide(WindowInsetsCompat.Type.systemBars())
-                                    systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                                    act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                    WindowCompat.setDecorFitsSystemWindows(act.window, false)
+                                    WindowInsetsControllerCompat(act.window, act.window.decorView).apply {
+                                        hide(WindowInsetsCompat.Type.systemBars())
+                                        systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                                    }
                                 }
-                            }
-                        },
-                        onExitFullscreen = exitFullscreen,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 9f)
-                    )
+                            },
+                            onExitFullscreen = exitFullscreen,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f)
+                        )
+                    }
 
                     // Video info + controls
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -209,6 +225,12 @@ fun VideoPlayerScreen(
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
+
+                        PlaybackSpeedControls(
+                            speedTenths = speedTenths,
+                            enabled = supportsCustomSpeed,
+                            onSpeedChanged = { speedTenths = it }
+                        )
 
                         // Next/Previous controls
                         if (uiState.siblingVideos.size > 1) {
@@ -354,12 +376,60 @@ fun VideoPlayerScreen(
     }
 }
 
+@Composable
+private fun PlaybackSpeedControls(
+    speedTenths: Int,
+    enabled: Boolean,
+    onSpeedChanged: (Int) -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Speed", style = MaterialTheme.typography.labelLarge)
+            IconButton(
+                onClick = { onSpeedChanged((speedTenths - 1).coerceAtLeast(5)) },
+                enabled = enabled && speedTenths > 5
+            ) {
+                Icon(Icons.Default.Remove, contentDescription = "Decrease speed by 0.1x")
+            }
+            Text(
+                text = "${speedTenths / 10}.${speedTenths % 10}x",
+                style = MaterialTheme.typography.titleMedium
+            )
+            IconButton(
+                onClick = { onSpeedChanged((speedTenths + 1).coerceAtMost(40)) },
+                enabled = enabled && speedTenths < 40
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Increase speed by 0.1x")
+            }
+            TextButton(onClick = { onSpeedChanged(10) }, enabled = enabled && speedTenths != 10) {
+                Text("Normal")
+            }
+        }
+        if (!enabled) {
+            Text(
+                text = "Update Android System WebView to use custom playback speeds.",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
 @Keep
 private class VideoEndedBridge(
     private val onVideoEnded: () -> Unit,
     private val onEmbedError: () -> Unit
 ) {
     private val handler = Handler(Looper.getMainLooper())
+
+    @Volatile
+    var requestedPlaybackSpeed: Double = 1.0
+
+    @JavascriptInterface
+    fun getPlaybackSpeed(): Double = requestedPlaybackSpeed
 
     @JavascriptInterface
     fun onStateChange(state: Int) {
@@ -379,6 +449,12 @@ private class VideoEndedBridge(
 
     @JavascriptInterface
     fun onReady() { }
+}
+
+// Keep registration outside Compose's generic remember() call so lint can inspect
+// the concrete bridge class and its @JavascriptInterface methods.
+private fun WebView.registerPlayerBridge(bridge: VideoEndedBridge) {
+    addJavascriptInterface(bridge, "AndroidBridge")
 }
 
 private fun buildYouTubePlayerHtml(videoId: String, origin: String, showControls: Boolean): String {
@@ -450,14 +526,16 @@ private fun buildYouTubePlayerHtml(videoId: String, origin: String, showControls
 @Composable
 private fun YouTubePlayer(
     youtubeId: String,
+    playbackSpeed: Double,
+    modifier: Modifier = Modifier,
     shouldPause: Boolean = false,
     onVideoEnded: () -> Unit,
     onEmbedError: () -> Unit = {},
     onEnterFullscreen: (View, WebChromeClient.CustomViewCallback) -> Unit,
-    onExitFullscreen: () -> Unit,
-    modifier: Modifier = Modifier
+    onExitFullscreen: () -> Unit
 ) {
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
+    val bridge: VideoEndedBridge = remember { VideoEndedBridge(onVideoEnded, onEmbedError) }
 
     // Pause video when overlay blocks playback (sleep timer / time limit)
     LaunchedEffect(shouldPause) {
@@ -499,10 +577,18 @@ private fun YouTubePlayer(
                 cookieManager.setAcceptCookie(true)
                 cookieManager.setAcceptThirdPartyCookies(this, true)
 
-                addJavascriptInterface(
-                    VideoEndedBridge(onVideoEnded, onEmbedError),
-                    "AndroidBridge"
-                )
+                bridge.requestedPlaybackSpeed = playbackSpeed
+                registerPlayerBridge(bridge)
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                    val speedScript = ctx.assets.open("playback-speed.js").bufferedReader().use {
+                        it.readText()
+                    }
+                    WebViewCompat.addDocumentStartJavaScript(
+                        this,
+                        speedScript,
+                        setOf("https://www.youtube.com")
+                    )
+                }
 
                 webChromeClient = object : WebChromeClient() {
                     override fun getDefaultVideoPoster(): Bitmap? {
@@ -535,7 +621,7 @@ private fun YouTubePlayer(
                 loadDataWithBaseURL(origin, html, "text/html", "utf-8", null)
             }
         },
-        update = { /* Re-creation handled by DisposableEffect keyed on youtubeId */ },
+        update = { bridge.requestedPlaybackSpeed = playbackSpeed },
         modifier = modifier
     )
 }

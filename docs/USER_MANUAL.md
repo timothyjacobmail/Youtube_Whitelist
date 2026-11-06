@@ -148,6 +148,7 @@ When your child taps on a video, the **Video Player** opens:
 
 - The video starts playing automatically using YouTube's embedded player
 - Standard playback controls are available (play/pause, seek, volume, fullscreen)
+- Use the **Speed − / +** controls below the video to adjust playback from **0.5x to 4.0x** in **0.1x increments**, including 2.1x, 2.2x, and higher. Tap **Normal** to return to 1.0x. The selected speed carries over to the next video while the player screen is open and applies in fullscreen. Exit fullscreen to adjust it. These controls require an up-to-date Android System WebView and override the embedded player's speed presets.
 - **Navigation controls** appear below the video:
   - **Previous** / **Next** buttons to skip between videos
   - Current position indicator (e.g., "3 / 10")
