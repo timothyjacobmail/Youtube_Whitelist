@@ -122,8 +122,9 @@ fun VideoPlayerScreen(
         }
     }
 
-    // When overlay appears (sleep timer or time limit), exit fullscreen
-    val shouldBlock = uiState.isSleepTimerExpired || uiState.isTimeLimitReached
+    // Leave fullscreen whenever the splash or a parental limit blocks playback.
+    val shouldBlock = uiState.playbackDelaySeconds > 0 ||
+        uiState.isSleepTimerExpired || uiState.isTimeLimitReached
     LaunchedEffect(shouldBlock) {
         if (shouldBlock && fullscreenView != null) {
             exitFullscreen()
@@ -152,7 +153,31 @@ fun VideoPlayerScreen(
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            if (uiState.isLoading) {
+            if (uiState.playbackDelaySeconds > 0) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(padding)
+                        .padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "Taking a short break",
+                        style = MaterialTheme.typography.titleLarge,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "This pause is intentional.\nYour video will start automatically.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            } else if (uiState.isLoading) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -161,7 +186,9 @@ fun VideoPlayerScreen(
                 ) {
                     CircularProgressIndicator()
                 }
-            } else {
+            } else if (!shouldBlock) {
+                // Do not create the WebView until the countdown and parental blocks clear.
+                // Removing the old player also stops its audio when another video is selected.
                 Column(
                     modifier = Modifier
                         .fillMaxSize()

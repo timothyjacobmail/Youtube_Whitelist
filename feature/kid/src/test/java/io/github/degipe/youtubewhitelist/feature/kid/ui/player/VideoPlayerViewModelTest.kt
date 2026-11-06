@@ -19,6 +19,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -87,6 +89,90 @@ class VideoPlayerViewModelTest {
             initialVideoTitle = videoTitle,
             channelTitle = channelTitle
         )
+    }
+
+    @Test
+    fun `opening a video blocks playback for the full twenty seconds`() = runTest(testDispatcher) {
+        setupDefaultTimeLimit()
+        val viewModel = createViewModel(channelTitle = null)
+
+        assertThat(viewModel.uiState.value.playbackDelaySeconds).isEqualTo(20)
+        runCurrent()
+        advanceTimeBy(19_999)
+        runCurrent()
+        assertThat(viewModel.uiState.value.playbackDelaySeconds).isEqualTo(1)
+
+        advanceTimeBy(1)
+        runCurrent()
+        assertThat(viewModel.uiState.value.playbackDelaySeconds).isEqualTo(0)
+        coVerify(exactly = 0) { watchHistoryRepository.recordWatch(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `selecting another video replaces the old countdown with a full delay`() = runTest(testDispatcher) {
+        every { whitelistRepository.getVideosByChannelTitle("profile-1", "Fun Channel") } returns
+            flowOf(listOf(currentVideo, makeVideo("next", "Next Video")))
+        setupDefaultTimeLimit()
+        val viewModel = createViewModel()
+        runCurrent()
+        advanceTimeBy(10_000)
+        runCurrent()
+
+        viewModel.playVideoAt(1)
+        assertThat(viewModel.uiState.value.playbackDelaySeconds).isEqualTo(20)
+        runCurrent()
+        advanceTimeBy(10_000)
+        runCurrent()
+        // The first video's original deadline must not release this video's playback.
+        assertThat(viewModel.uiState.value.playbackDelaySeconds).isEqualTo(10)
+        assertThat(viewModel.uiState.value.youtubeId).isEqualTo("yt-next")
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertThat(viewModel.uiState.value.playbackDelaySeconds).isEqualTo(0)
+
+        viewModel.playPrevious()
+        assertThat(viewModel.uiState.value.playbackDelaySeconds).isEqualTo(20)
+    }
+
+    @Test
+    fun `same video and sibling refresh do not restart the countdown`() = runTest(testDispatcher) {
+        val siblings = MutableStateFlow(listOf(currentVideo))
+        every { whitelistRepository.getVideosByChannelTitle("profile-1", "Fun Channel") } returns siblings
+        setupDefaultTimeLimit()
+        val viewModel = createViewModel()
+        runCurrent()
+        advanceTimeBy(5_000)
+        runCurrent()
+
+        viewModel.playVideoAt(0)
+        viewModel.playVideoAt(-1)
+        siblings.value = listOf(currentVideo, makeVideo("next", "Next Video"))
+        runCurrent()
+        assertThat(viewModel.uiState.value.playbackDelaySeconds).isEqualTo(15)
+        advanceTimeBy(15_000)
+        runCurrent()
+
+        viewModel.playNext()
+        assertThat(viewModel.uiState.value.playbackDelaySeconds).isEqualTo(20)
+    }
+
+    @Test
+    fun `countdown completion preserves sleep and daily limit blocks`() = runTest(testDispatcher) {
+        every { timeLimitChecker.getTimeLimitStatus("profile-1") } returns
+            flowOf(noLimitStatus.copy(isLimitReached = true))
+        sleepTimerStateFlow.value = SleepTimerState(
+            status = SleepTimerStatus.EXPIRED,
+            profileId = "profile-1",
+            remainingSeconds = 0
+        )
+        val viewModel = createViewModel(channelTitle = null)
+        runCurrent()
+        advanceTimeBy(20_000)
+        runCurrent()
+
+        assertThat(viewModel.uiState.value.playbackDelaySeconds).isEqualTo(0)
+        assertThat(viewModel.uiState.value.isTimeLimitReached).isTrue()
+        assertThat(viewModel.uiState.value.isSleepTimerExpired).isTrue()
     }
 
     @Test

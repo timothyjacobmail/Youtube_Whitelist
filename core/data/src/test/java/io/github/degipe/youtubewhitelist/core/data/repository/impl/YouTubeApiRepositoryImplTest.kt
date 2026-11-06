@@ -49,6 +49,23 @@ class YouTubeApiRepositoryImplTest {
     // === getChannelById ===
 
     @Test
+    fun `popular videos preserve ranking and thumbnail links`() = runTest(testDispatcher) {
+        coEvery { apiService.getPopularChannelVideos("UC123") } returns Response.success(
+            YouTubeListResponse(items = listOf(
+                SearchResultDto(id = SearchResultId(videoId = "top"), snippet = SearchSnippet(
+                    title = "Top video", channelTitle = "Channel",
+                    thumbnails = ThumbnailSet(high = Thumbnail(url = "https://img/top.jpg"))
+                )),
+                SearchResultDto(id = SearchResultId(videoId = "next"), snippet = SearchSnippet(title = "Next"))
+            ))
+        )
+        val result = repository.getPopularChannelVideos("UC123") as AppResult.Success
+        assertThat(result.data.map { it.videoId }).containsExactly("top", "next").inOrder()
+        assertThat(result.data.map { it.position }).containsExactly(0, 1).inOrder()
+        assertThat(result.data.first().thumbnailUrl).isEqualTo("https://img/top.jpg")
+    }
+
+    @Test
     fun `getChannelById returns success with mapped channel`() = runTest(testDispatcher) {
         val channelDto = createChannelDto(
             id = "UC123",

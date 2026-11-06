@@ -12,6 +12,15 @@ class ChannelVideoCacheRepositoryImpl @Inject constructor(
     private val cachedChannelVideoDao: CachedChannelVideoDao
 ) : ChannelVideoCacheRepository {
 
+    // A separate namespace preserves popularity order independently of uploads.
+    override fun getPopularVideos(channelId: String): Flow<List<PlaylistVideo>> =
+        getVideos("popular:$channelId")
+
+    override suspend fun replacePopularVideos(channelId: String, videos: List<PlaylistVideo>) {
+        val key = "popular:$channelId"
+        cachedChannelVideoDao.replaceVideos(key, videos.map { it.toEntity(key) })
+    }
+
     override fun getVideos(channelId: String): Flow<List<PlaylistVideo>> =
         cachedChannelVideoDao.getVideosByChannel(channelId).map { entities ->
             entities.map { it.toPlaylistVideo() }

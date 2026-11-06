@@ -3,11 +3,18 @@ package io.github.degipe.youtubewhitelist.core.database.dao
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
+import androidx.room.Transaction
 import io.github.degipe.youtubewhitelist.core.database.entity.CachedChannelVideoEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CachedChannelVideoDao {
+
+    @Transaction
+    suspend fun replaceVideos(channelId: String, videos: List<CachedChannelVideoEntity>) {
+        deleteByChannel(channelId)
+        upsertAll(videos)
+    }
 
     @Query("SELECT * FROM cached_channel_videos WHERE channelId = :channelId ORDER BY position ASC")
     fun getVideosByChannel(channelId: String): Flow<List<CachedChannelVideoEntity>>

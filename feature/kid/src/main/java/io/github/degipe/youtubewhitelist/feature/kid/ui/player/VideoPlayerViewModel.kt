@@ -13,6 +13,7 @@ import io.github.degipe.youtubewhitelist.core.data.sleep.SleepTimerManager
 import io.github.degipe.youtubewhitelist.core.data.sleep.SleepTimerStatus
 import io.github.degipe.youtubewhitelist.core.data.timelimit.TimeLimitChecker
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +28,7 @@ data class VideoPlayerUiState(
     val hasNext: Boolean = false,
     val hasPrevious: Boolean = false,
     val isLoading: Boolean = true,
+    val playbackDelaySeconds: Int = 0,
     val error: String? = null,
     val remainingTimeFormatted: String? = null,
     val isTimeLimitReached: Boolean = false,
@@ -59,6 +61,7 @@ class VideoPlayerViewModel @AssistedInject constructor(
     val uiState: StateFlow<VideoPlayerUiState> = _uiState.asStateFlow()
 
     private var siblingsJob: Job? = null
+    private var playbackDelayJob: Job? = null
 
     init {
         loadVideo()
@@ -73,6 +76,19 @@ class VideoPlayerViewModel @AssistedInject constructor(
             youtubeId = videoId,
             isLoading = false
         )
+        startPlaybackDelay()
+    }
+
+    private fun startPlaybackDelay() {
+        playbackDelayJob?.cancel()
+        // Set this synchronously so the player cannot autoplay before the coroutine runs.
+        _uiState.value = _uiState.value.copy(playbackDelaySeconds = PLAYBACK_DELAY_SECONDS)
+        playbackDelayJob = viewModelScope.launch {
+            for (remaining in PLAYBACK_DELAY_SECONDS - 1 downTo 0) {
+                delay(1_000L)
+                _uiState.value = _uiState.value.copy(playbackDelaySeconds = remaining)
+            }
+        }
     }
 
     private fun loadSiblings() {
@@ -154,6 +170,7 @@ class VideoPlayerViewModel @AssistedInject constructor(
         if (index < 0 || index >= siblings.size) return
 
         val nextItem = siblings[index]
+        if (nextItem.youtubeId == _uiState.value.youtubeId) return
         _uiState.value = _uiState.value.copy(
             videoId = nextItem.youtubeId,
             videoTitle = nextItem.title,
@@ -162,11 +179,16 @@ class VideoPlayerViewModel @AssistedInject constructor(
             hasNext = index < siblings.size - 1,
             hasPrevious = index > 0
         )
+        startPlaybackDelay()
     }
 
     private fun formatRemaining(seconds: Int): String {
         val hours = seconds / 3600
         val minutes = (seconds % 3600) / 60
         return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+    }
+
+    private companion object {
+        const val PLAYBACK_DELAY_SECONDS = 20
     }
 }

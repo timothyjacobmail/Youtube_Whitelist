@@ -22,6 +22,18 @@ A free, open-source Android app that lets parents whitelist specific YouTube cha
 
 ## Building
 
+### Saved popular videos
+
+Opening a whitelisted channel shows its top 50 videos by view count. The first visit
+fetches the list and saves video IDs, titles, thumbnail URLs, and ranking in the local
+database. Later visits (including after restarting the app) reuse a nonempty saved
+list without a YouTube API lookup. Search filters that saved list locally.
+
+Use Refresh to update the ranking, or Latest to browse recent uploads. A failed
+refresh keeps the saved list available. Empty results are retried on the next visit.
+Thumbnail images use the existing image loader cache; video playback still needs
+an internet connection. This feature stores metadata, not video downloads.
+
 ### Prerequisites
 
 - Android Studio (or JDK 17 + Android SDK)

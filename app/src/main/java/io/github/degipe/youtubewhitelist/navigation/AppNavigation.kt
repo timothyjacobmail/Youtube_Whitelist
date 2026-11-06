@@ -2,7 +2,6 @@ package io.github.degipe.youtubewhitelist.navigation
 
 import android.app.Activity
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -142,20 +141,10 @@ fun AppNavigation(
 
         composable<Route.KidHome> { backStackEntry ->
             val route = backStackEntry.toRoute<Route.KidHome>()
-            val context = LocalContext.current
             val viewModel: KidHomeViewModel =
                 hiltViewModel<KidHomeViewModel, KidHomeViewModel.Factory> { factory ->
                     factory.create(route.profileId)
                 }
-
-            // Start screen pinning when entering kid mode
-            LaunchedEffect(Unit) {
-                try {
-                    (context as? Activity)?.startLockTask()
-                } catch (_: Exception) {
-                    // Screen pinning not available or already active
-                }
-            }
 
             KidHomeScreen(
                 viewModel = viewModel,

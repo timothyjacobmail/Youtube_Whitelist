@@ -76,14 +76,53 @@ class ChannelDetailViewModelTest {
 
     private fun createViewModel(
         channelId: String = "UC123",
-        channelTitle: String = "Fun Channel"
+        channelTitle: String = "Fun Channel",
+        popular: Boolean = false
     ): ChannelDetailViewModel {
         return ChannelDetailViewModel(
             youTubeApiRepository = youTubeApiRepository,
             channelVideoCacheRepository = channelVideoCacheRepository,
             channelId = channelId,
             channelTitle = channelTitle
-        )
+        ).also { if (!popular) it.showPopular(false) }
+    }
+
+    @Test
+    fun `popular cache survives reopening without any API requests`() = runTest(testDispatcher) {
+        val saved = listOf(makeVideo("popular1", "Popular video", 0))
+        every { channelVideoCacheRepository.getPopularVideos("UC123") } returns MutableStateFlow(saved)
+
+        val first = createViewModel(popular = true)
+        advanceUntilIdle()
+        val reopened = createViewModel(popular = true)
+        advanceUntilIdle()
+
+        assertThat(first.uiState.value.videos).isEqualTo(saved)
+        assertThat(reopened.uiState.value.videos).isEqualTo(saved)
+        coVerify(exactly = 0) { youTubeApiRepository.getPopularChannelVideos(any()) }
+        coVerify(exactly = 0) { youTubeApiRepository.getChannelById(any()) }
+    }
+
+    @Test
+    fun `popular miss saves results and failed refresh keeps them`() = runTest(testDispatcher) {
+        val saved = MutableStateFlow<List<PlaylistVideo>>(emptyList())
+        val videos = listOf(makeVideo("popular1", "Popular video", 0))
+        every { channelVideoCacheRepository.getPopularVideos("UC123") } returns saved
+        coEvery { youTubeApiRepository.getPopularChannelVideos("UC123") } returns AppResult.Success(videos)
+        coEvery { channelVideoCacheRepository.replacePopularVideos("UC123", any()) } coAnswers {
+            saved.value = secondArg()
+        }
+        val viewModel = createViewModel(popular = true)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.videos).isEqualTo(videos)
+        coVerify(exactly = 1) { channelVideoCacheRepository.replacePopularVideos("UC123", videos) }
+
+        coEvery { youTubeApiRepository.getPopularChannelVideos("UC123") } returns AppResult.Error("Offline")
+        viewModel.retry()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.videos).isEqualTo(videos)
+        assertThat(viewModel.uiState.value.error).isEqualTo("Offline")
+        coVerify(exactly = 1) { channelVideoCacheRepository.replacePopularVideos(any(), any()) }
     }
 
     @Test

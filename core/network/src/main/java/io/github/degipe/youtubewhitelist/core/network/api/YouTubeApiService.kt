@@ -12,6 +12,15 @@ import retrofit2.http.Query
 
 interface YouTubeApiService {
 
+    @GET("search")
+    suspend fun getPopularChannelVideos(
+        @Query("channelId") channelId: String,
+        @Query("part") part: String = "snippet",
+        @Query("type") type: String = "video",
+        @Query("order") order: String = "viewCount",
+        @Query("maxResults") maxResults: Int = 50
+    ): Response<YouTubeListResponse<SearchResultDto>>
+
     @GET("channels")
     suspend fun getChannels(
         @Query("part") part: String = "snippet,contentDetails,statistics",

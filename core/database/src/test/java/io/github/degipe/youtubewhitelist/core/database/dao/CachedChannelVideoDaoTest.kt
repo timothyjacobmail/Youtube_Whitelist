@@ -35,6 +35,21 @@ class CachedChannelVideoDaoTest {
     }
 
     @Test
+    fun `replacing popular videos removes old ranking without changing uploads`() = runTest {
+        dao.upsertAll(listOf(
+            makeVideo(channelId = "UC123", videoId = "latest", title = "Latest", position = 0),
+            makeVideo(channelId = "popular:UC123", videoId = "old", title = "Old", position = 0)
+        ))
+        dao.replaceVideos("popular:UC123", listOf(
+            makeVideo(channelId = "popular:UC123", videoId = "top", title = "Top", position = 0)
+        ))
+        assertThat(dao.getVideosByChannel("popular:UC123").first().map { it.videoId })
+            .containsExactly("top")
+        assertThat(dao.getVideosByChannel("UC123").first().map { it.videoId })
+            .containsExactly("latest")
+    }
+
+    @Test
     fun `upsertAll inserts videos and getVideosByChannel returns them ordered by position`() = runTest {
         val videos = listOf(
             makeVideo(channelId = "UC123", videoId = "v2", title = "Second", position = 1),

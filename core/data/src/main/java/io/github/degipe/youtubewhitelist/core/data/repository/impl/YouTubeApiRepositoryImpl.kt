@@ -12,6 +12,7 @@ import io.github.degipe.youtubewhitelist.core.network.dto.PlaylistDto
 import io.github.degipe.youtubewhitelist.core.network.dto.ThumbnailSet
 import io.github.degipe.youtubewhitelist.core.network.dto.VideoDto
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import javax.inject.Inject
@@ -20,6 +21,23 @@ class YouTubeApiRepositoryImpl @Inject constructor(
     private val youTubeApiService: YouTubeApiService,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : YouTubeApiRepository {
+
+    override suspend fun getPopularChannelVideos(channelId: String): AppResult<List<PlaylistVideo>> =
+        withContext(ioDispatcher) {
+            safeApiCall {
+                val response = youTubeApiService.getPopularChannelVideos(channelId)
+                if (!response.isSuccessful) {
+                    return@safeApiCall AppResult.Error("API error: ${response.code()}")
+                }
+                val body = response.body()
+                    ?: return@safeApiCall AppResult.Error("Empty API response")
+                AppResult.Success(body.items.mapIndexedNotNull { index, item ->
+                    val id = item.id?.videoId ?: return@mapIndexedNotNull null
+                    val snippet = item.snippet ?: return@mapIndexedNotNull null
+                    PlaylistVideo(id, snippet.title, snippet.thumbnails.bestUrl(), snippet.channelTitle, index)
+                })
+            }
+        }
 
     override suspend fun getChannelById(channelId: String): AppResult<YouTubeMetadata.Channel> =
         withContext(ioDispatcher) {
@@ -157,6 +175,8 @@ class YouTubeApiRepositoryImpl @Inject constructor(
     private suspend fun <T> safeApiCall(block: suspend () -> AppResult<T>): AppResult<T> {
         return try {
             block()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: IOException) {
             AppResult.Error("Network error", e)
         } catch (e: Exception) {

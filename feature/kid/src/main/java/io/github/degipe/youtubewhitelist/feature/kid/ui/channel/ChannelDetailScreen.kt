@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -117,6 +119,12 @@ fun ChannelDetailScreen(
                     }
                 },
                 actions = {
+                    TextButton(onClick = { viewModel.showPopular(!uiState.showingPopular) }) {
+                        Text(if (uiState.showingPopular) "Latest" else "Popular")
+                    }
+                    IconButton(onClick = viewModel::retry, enabled = !uiState.isLoading) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh videos")
+                    }
                     if (isSearchActive) {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { viewModel.onClearSearch() }) {
@@ -191,6 +199,14 @@ fun ChannelDetailScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)
                 ) {
+                    item(key = "video_order") {
+                        Text(if (uiState.showingPopular) "Popular videos · saved on this device" else "Latest videos")
+                    }
+                    if (uiState.error != null) {
+                        item(key = "refresh_error") {
+                            Text(uiState.error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                        }
+                    }
                     items(uiState.videos, key = { it.videoId }) { video ->
                         ChannelVideoCard(
                             video = video,

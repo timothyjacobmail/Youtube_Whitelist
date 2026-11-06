@@ -29,6 +29,9 @@ class HybridYouTubeRepositoryImpl @Inject constructor(
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : YouTubeApiRepository {
 
+    override suspend fun getPopularChannelVideos(channelId: String): AppResult<List<PlaylistVideo>> =
+        YouTubeApiRepositoryImpl(youTubeApiService, ioDispatcher).getPopularChannelVideos(channelId)
+
     override suspend fun getVideoById(videoId: String): AppResult<YouTubeMetadata.Video> =
         withContext(ioDispatcher) {
             // Try 1: oEmbed (free, no quota)

@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 data class ChannelDetailUiState(
     val channelTitle: String = "",
@@ -28,7 +31,8 @@ data class ChannelDetailUiState(
     val isLoading: Boolean = true,
     val isLoadingMore: Boolean = false,
     val error: String? = null,
-    val hasMorePages: Boolean = false
+    val hasMorePages: Boolean = false,
+    val showingPopular: Boolean = true
 )
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
@@ -53,6 +57,8 @@ class ChannelDetailViewModel @AssistedInject constructor(
 
     private var uploadsPlaylistId: String? = null
     private var nextPageToken: String? = null
+    private val showingPopular = MutableStateFlow(true)
+    private var loadJob: Job? = null
 
     private data class ControlState(
         val isLoading: Boolean = true,
@@ -63,10 +69,14 @@ class ChannelDetailViewModel @AssistedInject constructor(
 
     private val _controlState = MutableStateFlow(ControlState())
 
-    private val videosFlow = _searchQuery
+    private val videosFlow = combine(_searchQuery, showingPopular) { query, popular -> query to popular }
         .debounce(300)
-        .flatMapLatest { query ->
-            if (query.isBlank()) {
+        .flatMapLatest { (query, popular) ->
+            if (popular) {
+                channelVideoCacheRepository.getPopularVideos(channelId).map { videos ->
+                    videos.filter { query.isBlank() || it.title.contains(query, ignoreCase = true) }
+                }
+            } else if (query.isBlank()) {
                 channelVideoCacheRepository.getVideos(channelId)
             } else {
                 channelVideoCacheRepository.searchVideos(channelId, query)
@@ -75,15 +85,17 @@ class ChannelDetailViewModel @AssistedInject constructor(
 
     val uiState: StateFlow<ChannelDetailUiState> = combine(
         videosFlow,
-        _controlState
-    ) { videos, ctrl ->
+        _controlState,
+        showingPopular
+    ) { videos, ctrl, popular ->
         ChannelDetailUiState(
             channelTitle = channelTitle,
             videos = videos,
             isLoading = ctrl.isLoading,
             isLoadingMore = ctrl.isLoadingMore,
             error = ctrl.error,
-            hasMorePages = ctrl.hasMorePages
+            hasMorePages = ctrl.hasMorePages,
+            showingPopular = popular
         )
     }.stateIn(
         scope = viewModelScope,
@@ -96,15 +108,22 @@ class ChannelDetailViewModel @AssistedInject constructor(
     }
 
     fun retry() {
+        if (loadJob?.isActive == true) return
+        loadChannelVideos(forceRefresh = true)
+    }
+
+    fun showPopular(popular: Boolean) {
+        if (showingPopular.value == popular) return
+        showingPopular.value = popular
         loadChannelVideos()
     }
 
     fun loadMore() {
         val token = nextPageToken
-        if (token == null || _controlState.value.isLoadingMore) return
+        if (showingPopular.value || token == null || _controlState.value.isLoadingMore) return
 
         _controlState.value = _controlState.value.copy(isLoadingMore = true)
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             val playlistId = uploadsPlaylistId ?: return@launch
             when (val result = youTubeApiRepository.getPlaylistItemsPage(playlistId, token)) {
                 is AppResult.Success -> {
@@ -134,10 +153,30 @@ class ChannelDetailViewModel @AssistedInject constructor(
         _searchQuery.value = ""
     }
 
-    private fun loadChannelVideos() {
+    private fun loadChannelVideos(forceRefresh: Boolean = false) {
+        loadJob?.cancel()
         _controlState.value = ControlState(isLoading = true)
         nextPageToken = null
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
+            if (showingPopular.value) {
+                val saved = channelVideoCacheRepository.getPopularVideos(channelId).first()
+                if (saved.isNotEmpty() && !forceRefresh) {
+                    _controlState.value = ControlState(isLoading = false)
+                    return@launch
+                }
+                // Keep saved results visible while refreshing, including on failure.
+                _controlState.value = ControlState(isLoading = saved.isEmpty())
+                when (val result = youTubeApiRepository.getPopularChannelVideos(channelId)) {
+                    is AppResult.Success -> {
+                        channelVideoCacheRepository.replacePopularVideos(channelId, result.data)
+                        _controlState.value = ControlState(isLoading = false)
+                    }
+                    is AppResult.Error -> {
+                        _controlState.value = ControlState(isLoading = false, error = result.message)
+                    }
+                }
+                return@launch
+            }
             channelVideoCacheRepository.clearCache(channelId)
 
             when (val channelResult = youTubeApiRepository.getChannelById(channelId)) {
