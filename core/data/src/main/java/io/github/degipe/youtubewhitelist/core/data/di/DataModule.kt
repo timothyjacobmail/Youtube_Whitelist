@@ -6,6 +6,10 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import io.github.degipe.youtubewhitelist.core.data.repository.ChannelVideoCacheRepository
+import io.github.degipe.youtubewhitelist.core.data.repository.OfflineVideoRepository
+import io.github.degipe.youtubewhitelist.core.data.repository.impl.OfflineVideoRepositoryImpl
+import io.github.degipe.youtubewhitelist.core.data.repository.LikedVideoRepository
+import io.github.degipe.youtubewhitelist.core.data.repository.impl.LikedVideoRepositoryImpl
 import io.github.degipe.youtubewhitelist.core.data.repository.KidProfileRepository
 import io.github.degipe.youtubewhitelist.core.data.repository.WatchHistoryRepository
 import io.github.degipe.youtubewhitelist.core.data.repository.WhitelistRepository
@@ -27,6 +31,14 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class DataModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindOfflineVideoRepository(impl: OfflineVideoRepositoryImpl): OfflineVideoRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindLikedVideoRepository(impl: LikedVideoRepositoryImpl): LikedVideoRepository
 
     @Binds
     @Singleton

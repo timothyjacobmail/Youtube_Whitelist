@@ -8,6 +8,9 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import io.github.degipe.youtubewhitelist.core.database.YouTubeWhitelistDatabase
+import io.github.degipe.youtubewhitelist.core.database.dao.OfflineVideoDao
+import io.github.degipe.youtubewhitelist.core.database.MIGRATION_3_4
+import io.github.degipe.youtubewhitelist.core.database.dao.LikedVideoDao
 import io.github.degipe.youtubewhitelist.core.database.dao.CachedChannelVideoDao
 import io.github.degipe.youtubewhitelist.core.database.dao.KidProfileDao
 import io.github.degipe.youtubewhitelist.core.database.dao.ParentAccountDao
@@ -26,9 +29,16 @@ object DatabaseModule {
             context,
             YouTubeWhitelistDatabase::class.java,
             "youtubewhitelist.db"
-        ).fallbackToDestructiveMigration()
+        ).addMigrations(MIGRATION_3_4)
+            .fallbackToDestructiveMigration()
             .build()
     }
+
+    @Provides
+    fun provideOfflineVideoDao(db: YouTubeWhitelistDatabase): OfflineVideoDao = db.offlineVideoDao()
+
+    @Provides
+    fun provideLikedVideoDao(db: YouTubeWhitelistDatabase): LikedVideoDao = db.likedVideoDao()
 
     @Provides
     fun provideParentAccountDao(db: YouTubeWhitelistDatabase): ParentAccountDao = db.parentAccountDao()

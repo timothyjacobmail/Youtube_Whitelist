@@ -164,6 +164,14 @@ When your child taps on a video, the **Video Player** opens:
 - The device rotates to landscape
 - Tap the back button or the exit-fullscreen button to return to portrait
 
+**Liked videos and offline saves**
+
+- Tap **Like video** below the player to add it to **Liked videos** on the home screen. Tap again to unlike it. Likes do not download videos.
+- Tap **Save offline · 7 days** to download a separate local copy, including audio. **Saved for offline** shows queued downloads, progress, errors, and ready copies. Tap a ready video to watch without an internet connection.
+- Offline copies expire seven days after the download finishes. You can cancel a download or delete its copy sooner without unliking the video. Open a failed download to retry.
+- Downloads select an available quality up to 720p and are limited to 512 MB per video. Leave the phone connected while the download completes. Some videos may not offer downloadable streams.
+- Lists are separate for each profile. Removing the whitelisted source removes its liked and offline entries; unused media files are cleaned up automatically. Offline media is stored privately on this phone and excluded from backups.
+
 ### 3.3 Browsing Channels
 
 Tapping a channel card on the Home screen opens the **Channel Detail** screen:

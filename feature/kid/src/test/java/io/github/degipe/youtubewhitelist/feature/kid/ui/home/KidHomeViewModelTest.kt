@@ -5,6 +5,8 @@ import io.github.degipe.youtubewhitelist.core.common.model.WhitelistItemType
 import io.github.degipe.youtubewhitelist.core.data.model.KidProfile
 import io.github.degipe.youtubewhitelist.core.data.model.WhitelistItem
 import io.github.degipe.youtubewhitelist.core.data.repository.KidProfileRepository
+import io.github.degipe.youtubewhitelist.core.data.repository.LikedVideoRepository
+import io.github.degipe.youtubewhitelist.core.data.repository.OfflineVideoRepository
 import io.github.degipe.youtubewhitelist.core.data.repository.WhitelistRepository
 import io.github.degipe.youtubewhitelist.core.data.sleep.SleepTimerManager
 import io.github.degipe.youtubewhitelist.core.data.sleep.SleepTimerState
@@ -28,6 +30,8 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class KidHomeViewModelTest {
 
+    private val likedVideoRepository = mockk<LikedVideoRepository>()
+    private val offlineVideoRepository = mockk<OfflineVideoRepository>()
     private lateinit var whitelistRepository: WhitelistRepository
     private lateinit var kidProfileRepository: KidProfileRepository
     private lateinit var timeLimitChecker: TimeLimitChecker
@@ -78,6 +82,8 @@ class KidHomeViewModelTest {
         timeLimitChecker = mockk()
         sleepTimerManager = mockk()
         every { sleepTimerManager.state } returns sleepTimerStateFlow
+        every { likedVideoRepository.getByProfile(any()) } returns flowOf(emptyList())
+        every { offlineVideoRepository.getByProfile(any()) } returns flowOf(emptyList())
     }
 
     @After
@@ -95,6 +101,8 @@ class KidHomeViewModelTest {
             kidProfileRepository = kidProfileRepository,
             timeLimitChecker = timeLimitChecker,
             sleepTimerManager = sleepTimerManager,
+            likedVideoRepository = likedVideoRepository,
+            offlineVideoRepository = offlineVideoRepository,
             profileId = profileId
         )
     }

@@ -154,6 +154,15 @@ fun AppNavigation(
                 onSearchClick = {
                     navController.navigate(Route.KidSearch(route.profileId))
                 },
+                onLibraryVideoClick = { video ->
+                    navController.navigate(Route.VideoPlayer(
+                        profileId = route.profileId,
+                        videoId = video.youtubeId,
+                        videoTitle = video.title,
+                        channelTitle = video.channelTitle,
+                        sourceYoutubeId = video.sourceYoutubeId
+                    ))
+                },
                 onChannelClick = { channelId, channelTitle, thumbnailUrl ->
                     navController.navigate(
                         Route.ChannelDetail(route.profileId, channelId, channelTitle, thumbnailUrl)
@@ -194,7 +203,8 @@ fun AppNavigation(
                             profileId = route.profileId,
                             videoId = videoId,
                             videoTitle = videoTitle,
-                            channelTitle = channelTitle
+                            channelTitle = channelTitle,
+                            sourceYoutubeId = route.channelId
                         )
                     )
                 }
@@ -205,7 +215,7 @@ fun AppNavigation(
             val route = backStackEntry.toRoute<Route.VideoPlayer>()
             val viewModel: VideoPlayerViewModel =
                 hiltViewModel<VideoPlayerViewModel, VideoPlayerViewModel.Factory> { factory ->
-                    factory.create(route.profileId, route.videoId, route.videoTitle, route.channelTitle)
+                    factory.create(route.profileId, route.videoId, route.videoTitle, route.channelTitle, route.sourceYoutubeId)
                 }
             VideoPlayerScreen(
                 viewModel = viewModel,
@@ -270,7 +280,8 @@ fun AppNavigation(
                             profileId = route.profileId,
                             videoId = videoId,
                             videoTitle = videoTitle,
-                            channelTitle = channelTitle
+                            channelTitle = channelTitle,
+                            sourceYoutubeId = route.playlistId
                         )
                     )
                 }

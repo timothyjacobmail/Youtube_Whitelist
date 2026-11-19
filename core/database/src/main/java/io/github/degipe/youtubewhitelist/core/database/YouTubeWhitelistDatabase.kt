@@ -2,6 +2,10 @@ package io.github.degipe.youtubewhitelist.core.database
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import io.github.degipe.youtubewhitelist.core.database.dao.OfflineVideoDao
+import io.github.degipe.youtubewhitelist.core.database.entity.OfflineVideoEntity
+import io.github.degipe.youtubewhitelist.core.database.dao.LikedVideoDao
+import io.github.degipe.youtubewhitelist.core.database.entity.LikedVideoEntity
 import io.github.degipe.youtubewhitelist.core.database.dao.CachedChannelVideoDao
 import io.github.degipe.youtubewhitelist.core.database.dao.KidProfileDao
 import io.github.degipe.youtubewhitelist.core.database.dao.ParentAccountDao
@@ -19,12 +23,16 @@ import io.github.degipe.youtubewhitelist.core.database.entity.WhitelistItemEntit
         KidProfileEntity::class,
         WhitelistItemEntity::class,
         WatchHistoryEntity::class,
-        CachedChannelVideoEntity::class
+        CachedChannelVideoEntity::class,
+        LikedVideoEntity::class,
+        OfflineVideoEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class YouTubeWhitelistDatabase : RoomDatabase() {
+    abstract fun offlineVideoDao(): OfflineVideoDao
+    abstract fun likedVideoDao(): LikedVideoDao
     abstract fun parentAccountDao(): ParentAccountDao
     abstract fun kidProfileDao(): KidProfileDao
     abstract fun whitelistItemDao(): WhitelistItemDao

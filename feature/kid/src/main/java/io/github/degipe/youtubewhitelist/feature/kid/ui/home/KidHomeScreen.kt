@@ -33,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -46,17 +47,20 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import io.github.degipe.youtubewhitelist.core.data.model.WhitelistItem
+import io.github.degipe.youtubewhitelist.core.data.model.LibraryVideo
 
 @Composable
 fun KidHomeScreen(
     viewModel: KidHomeViewModel,
     onParentAccess: () -> Unit,
     onSearchClick: () -> Unit,
+    onLibraryVideoClick: (LibraryVideo) -> Unit,
     onChannelClick: (youtubeId: String, channelTitle: String, thumbnailUrl: String) -> Unit,
     onVideoClick: (videoId: String, videoTitle: String, channelTitle: String?) -> Unit,
     onPlaylistClick: (youtubeId: String, title: String, thumbnailUrl: String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val libraryError by viewModel.likeError.collectAsStateWithLifecycle()
 
     // Block back button in kid mode — only parent can exit via PIN
     BackHandler { /* Intentionally empty — prevents exiting kid mode */ }
@@ -96,6 +100,10 @@ fun KidHomeScreen(
                     KidHomeContent(
                         uiState = uiState,
                         onSearchClick = onSearchClick,
+                        onLibraryVideoClick = onLibraryVideoClick,
+                        onUnlike = viewModel::removeLikedVideo,
+                        onDeleteOffline = viewModel::removeOfflineVideo,
+                        libraryError = libraryError,
                         onChannelClick = onChannelClick,
                         onVideoClick = onVideoClick,
                         onPlaylistClick = onPlaylistClick,
@@ -213,6 +221,10 @@ private fun EmptyContent(profileName: String, modifier: Modifier = Modifier) {
 private fun KidHomeContent(
     uiState: KidHomeUiState,
     onSearchClick: () -> Unit,
+    onLibraryVideoClick: (LibraryVideo) -> Unit,
+    onUnlike: (String) -> Unit,
+    onDeleteOffline: (String) -> Unit,
+    libraryError: String?,
     onChannelClick: (youtubeId: String, channelTitle: String, thumbnailUrl: String) -> Unit,
     onVideoClick: (videoId: String, videoTitle: String, channelTitle: String?) -> Unit,
     onPlaylistClick: (youtubeId: String, title: String, thumbnailUrl: String) -> Unit,
@@ -260,6 +272,47 @@ private fun KidHomeContent(
             }
         }
 
+        Text("Liked videos", style = MaterialTheme.typography.titleMedium)
+        if (uiState.likedVideos.isEmpty()) {
+            Text("Tap Like on a video to find it here.", style = MaterialTheme.typography.bodyMedium)
+        } else {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(uiState.likedVideos, key = { it.youtubeId }) { video ->
+                    Column(Modifier.width(200.dp)) {
+                        VideoCard(video.title, video.thumbnailUrl, video.channelTitle,
+                            onClick = { onLibraryVideoClick(video) })
+                        TextButton(onClick = { onUnlike(video.youtubeId) }) { Text("Unlike") }
+                    }
+                }
+            }
+        }
+
+        Text("Saved for offline", style = MaterialTheme.typography.titleMedium)
+        Text("Downloaded copies expire after 7 days.", style = MaterialTheme.typography.bodySmall)
+        if (uiState.offlineVideos.isEmpty()) {
+            Text("Use Save offline on a video to download it.", style = MaterialTheme.typography.bodyMedium)
+        } else {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(uiState.offlineVideos, key = { it.video.youtubeId }) { offline ->
+                    Column(Modifier.width(200.dp)) {
+                        val video = offline.video
+                        VideoCard(video.title, video.thumbnailUrl, video.channelTitle,
+                            onClick = { onLibraryVideoClick(video) })
+                        Text(when (offline.state) {
+                            "ready" -> "Available offline · ${java.text.DateFormat.getDateInstance().format(java.util.Date(offline.expiresAt))} expiry"
+                            "queued" -> "Waiting for connection / storage"
+                            "downloading" -> "Downloading ${offline.progress}%"
+                            else -> offline.error ?: "Download failed. Open video to retry."
+                        }, style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { onDeleteOffline(video.youtubeId) }) {
+                            Text(if (offline.state in listOf("queued", "downloading")) "Cancel download" else "Delete offline copy")
+                        }
+                    }
+                }
+            }
+        }
+        libraryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+
         // Channels section
         if (uiState.channels.isNotEmpty()) {
             Text(
@@ -303,7 +356,9 @@ private fun KidHomeContent(
             ) {
                 items(uiState.recentVideos, key = { it.id }) { video ->
                     VideoCard(
-                        video = video,
+                        title = video.title,
+                        thumbnailUrl = video.thumbnailUrl,
+                        channelTitle = video.channelTitle,
                         onClick = { onVideoClick(video.youtubeId, video.title, video.channelTitle) }
                     )
                 }
@@ -322,7 +377,9 @@ private fun KidHomeContent(
             ) {
                 items(uiState.playlists, key = { it.id }) { playlist ->
                     VideoCard(
-                        video = playlist,
+                        title = playlist.title,
+                        thumbnailUrl = playlist.thumbnailUrl,
+                        channelTitle = playlist.channelTitle,
                         onClick = { onPlaylistClick(playlist.youtubeId, playlist.title, playlist.thumbnailUrl) }
                     )
                 }
@@ -371,7 +428,9 @@ private fun ChannelCard(
 
 @Composable
 private fun VideoCard(
-    video: WhitelistItem,
+    title: String,
+    thumbnailUrl: String,
+    channelTitle: String?,
     onClick: () -> Unit
 ) {
     Card(
@@ -381,8 +440,8 @@ private fun VideoCard(
     ) {
         Column {
             AsyncImage(
-                model = video.thumbnailUrl,
-                contentDescription = video.title,
+                model = thumbnailUrl,
+                contentDescription = title,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f),
@@ -390,12 +449,12 @@ private fun VideoCard(
             )
             Column(modifier = Modifier.padding(8.dp)) {
                 Text(
-                    text = video.title,
+                    text = title,
                     style = MaterialTheme.typography.labelMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                video.channelTitle?.let { channelTitle ->
+                channelTitle?.let { channelTitle ->
                     Text(
                         text = channelTitle,
                         style = MaterialTheme.typography.bodySmall,

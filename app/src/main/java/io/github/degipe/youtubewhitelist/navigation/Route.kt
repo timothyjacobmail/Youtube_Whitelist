@@ -24,7 +24,8 @@ sealed interface Route {
         val profileId: String,
         val videoId: String,
         val videoTitle: String = "",
-        val channelTitle: String? = null
+        val channelTitle: String? = null,
+        val sourceYoutubeId: String? = null
     ) : Route
     @Serializable data class KidSearch(val profileId: String) : Route
     @Serializable data class SleepMode(val profileId: String) : Route

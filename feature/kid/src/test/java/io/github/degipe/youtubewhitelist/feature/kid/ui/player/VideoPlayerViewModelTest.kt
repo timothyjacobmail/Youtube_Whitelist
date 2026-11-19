@@ -3,7 +3,11 @@ package io.github.degipe.youtubewhitelist.feature.kid.ui.player
 import com.google.common.truth.Truth.assertThat
 import io.github.degipe.youtubewhitelist.core.common.model.WhitelistItemType
 import io.github.degipe.youtubewhitelist.core.data.model.WhitelistItem
+import io.github.degipe.youtubewhitelist.core.data.model.LibraryVideo
+import io.github.degipe.youtubewhitelist.core.data.model.OfflineVideo
 import io.github.degipe.youtubewhitelist.core.data.repository.WatchHistoryRepository
+import io.github.degipe.youtubewhitelist.core.data.repository.LikedVideoRepository
+import io.github.degipe.youtubewhitelist.core.data.repository.OfflineVideoRepository
 import io.github.degipe.youtubewhitelist.core.data.repository.WhitelistRepository
 import io.github.degipe.youtubewhitelist.core.data.sleep.SleepTimerManager
 import io.github.degipe.youtubewhitelist.core.data.sleep.SleepTimerState
@@ -31,6 +35,8 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class VideoPlayerViewModelTest {
 
+    private val likedVideoRepository = mockk<LikedVideoRepository>()
+    private val offlineVideoRepository = mockk<OfflineVideoRepository>()
     private lateinit var whitelistRepository: WhitelistRepository
     private lateinit var watchHistoryRepository: WatchHistoryRepository
     private lateinit var timeLimitChecker: TimeLimitChecker
@@ -62,6 +68,8 @@ class VideoPlayerViewModelTest {
         timeLimitChecker = mockk()
         sleepTimerManager = mockk()
         every { sleepTimerManager.state } returns sleepTimerStateFlow
+        every { likedVideoRepository.getByProfile(any()) } returns flowOf(emptyList())
+        every { offlineVideoRepository.getByProfile(any()) } returns flowOf(emptyList())
     }
 
     @After
@@ -84,11 +92,69 @@ class VideoPlayerViewModelTest {
             watchHistoryRepository = watchHistoryRepository,
             timeLimitChecker = timeLimitChecker,
             sleepTimerManager = sleepTimerManager,
+            likedVideoRepository = likedVideoRepository,
+            offlineVideoRepository = offlineVideoRepository,
             profileId = profileId,
             videoId = videoId,
             initialVideoTitle = videoTitle,
             channelTitle = channelTitle
         )
+    }
+
+    @Test
+    fun `liking a video does not download it and unlike updates the current state`() = runTest(testDispatcher) {
+        setupDefaultTimeLimit()
+        val liked = MutableStateFlow<List<LibraryVideo>>(emptyList())
+        every { likedVideoRepository.getByProfile("profile-1") } returns liked
+        coEvery { likedVideoRepository.like(any()) } coAnswers {
+            liked.value = listOf(firstArg())
+            true
+        }
+        coEvery { likedVideoRepository.remove("profile-1", "yt-current") } coAnswers { liked.value = emptyList() }
+        val model = createViewModel(channelTitle = null)
+        runCurrent()
+        model.toggleLiked()
+        runCurrent()
+        assertThat(model.uiState.value.isLiked).isTrue()
+        assertThat(model.uiState.value.isLiking).isFalse()
+        coVerify(exactly = 0) { offlineVideoRepository.download(any()) }
+        model.toggleLiked()
+        runCurrent()
+        assertThat(model.uiState.value.isLiked).isFalse()
+    }
+
+    @Test
+    fun `saving offline does not like the video and can be cancelled`() = runTest(testDispatcher) {
+        setupDefaultTimeLimit()
+        val offline = MutableStateFlow<List<OfflineVideo>>(emptyList())
+        every { offlineVideoRepository.getByProfile("profile-1") } returns offline
+        coEvery { offlineVideoRepository.download(any()) } coAnswers {
+            offline.value = listOf(OfflineVideo(firstArg(), "queued", 0, 0, null, null, null))
+            true
+        }
+        coEvery { offlineVideoRepository.remove("profile-1", "yt-current") } coAnswers { offline.value = emptyList() }
+        val model = createViewModel(channelTitle = null)
+        runCurrent()
+        model.toggleOffline()
+        runCurrent()
+        assertThat(model.uiState.value.offlineVideo?.state).isEqualTo("queued")
+        assertThat(model.uiState.value.isLiked).isFalse()
+        coVerify(exactly = 0) { likedVideoRepository.like(any()) }
+        model.toggleOffline()
+        runCurrent()
+        assertThat(model.uiState.value.offlineVideo).isNull()
+    }
+
+    @Test
+    fun `download request failure clears busy state and reports an error`() = runTest(testDispatcher) {
+        setupDefaultTimeLimit()
+        coEvery { offlineVideoRepository.download(any()) } throws java.io.IOException("test failure")
+        val model = createViewModel(channelTitle = null)
+        runCurrent()
+        model.toggleOffline()
+        runCurrent()
+        assertThat(model.uiState.value.isUpdatingDownload).isFalse()
+        assertThat(model.uiState.value.likeError).contains("Couldn't update")
     }
 
     @Test

@@ -37,6 +37,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.SkipNext
@@ -187,6 +189,10 @@ fun VideoPlayerScreen(
                     CircularProgressIndicator()
                 }
             } else if (!shouldBlock) {
+                // Keep the chosen source stable while this video is playing.
+                val offlinePlayback = remember(uiState.youtubeId) {
+                    uiState.offlineVideo?.takeIf { it.localPath != null }
+                }
                 // Do not create the WebView until the countdown and parental blocks clear.
                 // Removing the old player also stops its audio when another video is selected.
                 Column(
@@ -209,6 +215,18 @@ fun VideoPlayerScreen(
 
                     // YouTube Player WebView
                     key(uiState.youtubeId) {
+                        // Choose a local copy when opening the player. A download completing
+                        // during online playback must not restart the video halfway through.
+                        val offlinePath = offlinePlayback?.localPath
+                        if (offlinePath != null) {
+                            OfflinePlayer(
+                                videoPath = offlinePath,
+                                audioPath = offlinePlayback?.audioPath,
+                                speed = speedTenths / 10f,
+                                onVideoEnded = { viewModel.playNext() },
+                                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                            )
+                        } else {
                         YouTubePlayer(
                             youtubeId = uiState.youtubeId,
                             playbackSpeed = speedTenths / 10.0,
@@ -240,10 +258,15 @@ fun VideoPlayerScreen(
                                 .fillMaxWidth()
                                 .aspectRatio(16f / 9f)
                         )
+                        }
                     }
 
                     // Video info + controls
                     Column(modifier = Modifier.padding(16.dp)) {
+                        if (offlinePlayback != null) {
+                            Text("Playing offline", color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.labelMedium)
+                        }
                         Text(
                             text = uiState.videoTitle,
                             style = MaterialTheme.typography.titleMedium,
@@ -255,9 +278,37 @@ fun VideoPlayerScreen(
 
                         PlaybackSpeedControls(
                             speedTenths = speedTenths,
-                            enabled = supportsCustomSpeed,
+                            enabled = supportsCustomSpeed || offlinePlayback != null,
                             onSpeedChanged = { speedTenths = it }
                         )
+
+                        TextButton(
+                            onClick = viewModel::toggleLiked,
+                            enabled = !uiState.isLiking
+                        ) {
+                            Icon(
+                                if (uiState.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = null
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (uiState.isLiking) "Updating…" else if (uiState.isLiked) "Liked · tap to unlike" else "Like video")
+                        }
+                        TextButton(onClick = viewModel::toggleOffline, enabled = !uiState.isUpdatingDownload) {
+                            Text(when (uiState.offlineVideo?.state) {
+                                "ready" -> "Saved offline · delete copy"
+                                "queued" -> "Download queued · cancel"
+                                "downloading" -> "Downloading ${uiState.offlineVideo?.progress}% · cancel"
+                                "failed" -> "Retry offline download"
+                                else -> "Save offline · 7 days"
+                            })
+                        }
+                        uiState.offlineVideo?.error?.let {
+                            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+                        uiState.likeError?.let { error ->
+                            Text(error, color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall)
+                        }
 
                         // Next/Previous controls
                         if (uiState.siblingVideos.size > 1) {

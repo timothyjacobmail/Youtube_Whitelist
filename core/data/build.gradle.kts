@@ -31,6 +31,8 @@ dependencies {
 
     // Network (needed for retrofit2.Response used in API repository)
     implementation(libs.retrofit)
+    implementation(libs.okhttp)
+    implementation("com.github.teamnewpipe:NewPipeExtractor:v0.26.5")
 
     // Coroutines
     implementation(libs.coroutines.core)
