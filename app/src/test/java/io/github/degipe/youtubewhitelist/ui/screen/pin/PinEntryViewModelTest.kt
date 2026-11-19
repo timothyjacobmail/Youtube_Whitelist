@@ -45,9 +45,9 @@ class PinEntryViewModelTest {
 
     @Test
     fun `correct pin sets isVerified`() = runTest(testDispatcher) {
-        coEvery { pinRepository.verifyPin("1234") } returns PinVerificationResult.Success
+        coEvery { pinRepository.verifyPin("old123") } returns PinVerificationResult.Success
 
-        enterPin("1234")
+        viewModel.onPasswordChanged("old123")
         viewModel.onSubmit()
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -56,9 +56,9 @@ class PinEntryViewModelTest {
 
     @Test
     fun `incorrect pin shows error with attempts remaining`() = runTest(testDispatcher) {
-        coEvery { pinRepository.verifyPin("9999") } returns PinVerificationResult.Failure(4)
+        coEvery { pinRepository.verifyPin("wrong789") } returns PinVerificationResult.Failure(4)
 
-        enterPin("9999")
+        viewModel.onPasswordChanged("wrong789")
         viewModel.onSubmit()
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -71,9 +71,9 @@ class PinEntryViewModelTest {
 
     @Test
     fun `locked out shows lockout state`() = runTest(testDispatcher) {
-        coEvery { pinRepository.verifyPin("1234") } returns PinVerificationResult.LockedOut(30)
+        coEvery { pinRepository.verifyPin("old123") } returns PinVerificationResult.LockedOut(30)
 
-        enterPin("1234")
+        viewModel.onPasswordChanged("old123")
         viewModel.onSubmit()
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -83,21 +83,16 @@ class PinEntryViewModelTest {
     }
 
     @Test
-    fun `entering digits updates pin`() {
-        viewModel.onDigitEntered(5)
-        viewModel.onDigitEntered(6)
-        assertThat(viewModel.uiState.value.pin).isEqualTo("56")
+    fun `editing the password replaces the prior value`() {
+        viewModel.onPasswordChanged("ab")
+        viewModel.onPasswordChanged("ab3")
+        assertThat(viewModel.uiState.value.pin).isEqualTo("ab3")
     }
 
     @Test
-    fun `backspace removes last digit`() {
-        viewModel.onDigitEntered(1)
-        viewModel.onDigitEntered(2)
-        viewModel.onBackspace()
+    fun `deleting a character updates the password`() {
+        viewModel.onPasswordChanged("12")
+        viewModel.onPasswordChanged("1")
         assertThat(viewModel.uiState.value.pin).isEqualTo("1")
-    }
-
-    private fun enterPin(pin: String) {
-        pin.forEach { viewModel.onDigitEntered(it.digitToInt()) }
     }
 }

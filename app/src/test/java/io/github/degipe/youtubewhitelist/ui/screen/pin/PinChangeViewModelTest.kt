@@ -43,9 +43,9 @@ class PinChangeViewModelTest {
 
     @Test
     fun `verify old pin success moves to enter new`() = runTest(testDispatcher) {
-        coEvery { pinRepository.verifyPin("1234") } returns PinVerificationResult.Success
+        coEvery { pinRepository.verifyPin("old123") } returns PinVerificationResult.Success
 
-        enterPin("1234")
+        viewModel.onPasswordChanged("old123")
         viewModel.onSubmit()
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -55,9 +55,9 @@ class PinChangeViewModelTest {
 
     @Test
     fun `verify old pin failure shows error`() = runTest(testDispatcher) {
-        coEvery { pinRepository.verifyPin("9999") } returns PinVerificationResult.Failure(4)
+        coEvery { pinRepository.verifyPin("wrong789") } returns PinVerificationResult.Failure(4)
 
-        enterPin("9999")
+        viewModel.onPasswordChanged("wrong789")
         viewModel.onSubmit()
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -67,15 +67,15 @@ class PinChangeViewModelTest {
 
     @Test
     fun `enter new pin moves to confirm`() = runTest(testDispatcher) {
-        coEvery { pinRepository.verifyPin("1234") } returns PinVerificationResult.Success
+        coEvery { pinRepository.verifyPin("old123") } returns PinVerificationResult.Success
 
         // Step 1: verify old
-        enterPin("1234")
+        viewModel.onPasswordChanged("old123")
         viewModel.onSubmit()
         testDispatcher.scheduler.advanceUntilIdle()
 
         // Step 2: enter new
-        enterPin("5678")
+        viewModel.onPasswordChanged("new456")
         viewModel.onSubmit()
 
         assertThat(viewModel.uiState.value.step).isEqualTo(PinChangeStep.CONFIRM_NEW)
@@ -84,20 +84,20 @@ class PinChangeViewModelTest {
 
     @Test
     fun `confirm matching pin completes change`() = runTest(testDispatcher) {
-        coEvery { pinRepository.verifyPin("1234") } returns PinVerificationResult.Success
-        coEvery { pinRepository.changePin("1234", "5678") } returns PinVerificationResult.Success
+        coEvery { pinRepository.verifyPin("old123") } returns PinVerificationResult.Success
+        coEvery { pinRepository.changePin("old123", "new456") } returns PinVerificationResult.Success
 
         // Step 1: verify old
-        enterPin("1234")
+        viewModel.onPasswordChanged("old123")
         viewModel.onSubmit()
         testDispatcher.scheduler.advanceUntilIdle()
 
         // Step 2: enter new
-        enterPin("5678")
+        viewModel.onPasswordChanged("new456")
         viewModel.onSubmit()
 
         // Step 3: confirm new
-        enterPin("5678")
+        viewModel.onPasswordChanged("new456")
         viewModel.onSubmit()
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -106,26 +106,22 @@ class PinChangeViewModelTest {
 
     @Test
     fun `confirm non-matching pin shows error and resets`() = runTest(testDispatcher) {
-        coEvery { pinRepository.verifyPin("1234") } returns PinVerificationResult.Success
+        coEvery { pinRepository.verifyPin("old123") } returns PinVerificationResult.Success
 
         // Step 1: verify old
-        enterPin("1234")
+        viewModel.onPasswordChanged("old123")
         viewModel.onSubmit()
         testDispatcher.scheduler.advanceUntilIdle()
 
         // Step 2: enter new
-        enterPin("5678")
+        viewModel.onPasswordChanged("new456")
         viewModel.onSubmit()
 
         // Step 3: wrong confirm
-        enterPin("9999")
+        viewModel.onPasswordChanged("wrong789")
         viewModel.onSubmit()
 
         assertThat(viewModel.uiState.value.error).isNotNull()
         assertThat(viewModel.uiState.value.step).isEqualTo(PinChangeStep.ENTER_NEW)
-    }
-
-    private fun enterPin(pin: String) {
-        pin.forEach { viewModel.onDigitEntered(it.digitToInt()) }
     }
 }

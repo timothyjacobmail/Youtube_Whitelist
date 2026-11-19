@@ -137,6 +137,6 @@ class SplashViewModelTest {
 
         val viewModel = SplashViewModel(parentAccountRepository, kidProfileRepository)
 
-        assertThat(viewModel.uiState.value).isEqualTo(SplashUiState.Loading)
+        assertThat(viewModel.uiState.value).isInstanceOf(SplashUiState.Loading::class.java)
     }
 }

@@ -43,40 +43,38 @@ class PinSetupViewModelTest {
     }
 
     @Test
-    fun `entering digits updates pin`() {
-        viewModel.onDigitEntered(1)
-        viewModel.onDigitEntered(2)
-        viewModel.onDigitEntered(3)
-
-        assertThat(viewModel.uiState.value.pin).isEqualTo("123")
+    fun `editing the password replaces the prior value`() {
+        viewModel.onPasswordChanged("ab")
+        viewModel.onPasswordChanged("ab3")
+        assertThat(viewModel.uiState.value.pin).isEqualTo("ab3")
     }
 
     @Test
-    fun `backspace removes last digit`() {
-        viewModel.onDigitEntered(1)
-        viewModel.onDigitEntered(2)
-        viewModel.onBackspace()
+    fun `deleting a character updates the password`() {
+        viewModel.onPasswordChanged("12")
+        viewModel.onPasswordChanged("1")
 
         assertThat(viewModel.uiState.value.pin).isEqualTo("1")
     }
 
     @Test
-    fun `backspace on empty pin does nothing`() {
-        viewModel.onBackspace()
+    fun `empty input clears the password`() {
+        viewModel.onPasswordChanged("12")
+        viewModel.onPasswordChanged("")
         assertThat(viewModel.uiState.value.pin).isEmpty()
     }
 
     @Test
-    fun `pin limited to 6 digits`() {
-        repeat(8) { viewModel.onDigitEntered(it % 10) }
-        assertThat(viewModel.uiState.value.pin).hasLength(6)
+    fun `password input longer than 64 characters is rejected`() {
+        val accepted = "a".repeat(64)
+        viewModel.onPasswordChanged(accepted)
+        viewModel.onPasswordChanged("${accepted}b")
+        assertThat(viewModel.uiState.value.pin).isEqualTo(accepted)
     }
 
     @Test
-    fun `submit with less than 4 digits shows error`() {
-        viewModel.onDigitEntered(1)
-        viewModel.onDigitEntered(2)
-        viewModel.onDigitEntered(3)
+    fun `submit with less than six characters shows error`() {
+        viewModel.onPasswordChanged("ab123")
         viewModel.onSubmit()
 
         assertThat(viewModel.uiState.value.error).isNotNull()
@@ -84,8 +82,8 @@ class PinSetupViewModelTest {
     }
 
     @Test
-    fun `submit with 4 digits moves to confirm step`() {
-        enterPin("1234")
+    fun `submit with six characters moves to confirm step`() {
+        viewModel.onPasswordChanged("old123")
         viewModel.onSubmit()
 
         assertThat(viewModel.uiState.value.step).isEqualTo(PinSetupStep.CONFIRM)
@@ -95,31 +93,27 @@ class PinSetupViewModelTest {
 
     @Test
     fun `confirm with matching pin calls setupPin`() = runTest(testDispatcher) {
-        coEvery { pinRepository.setupPin("1234") } returns Unit
+        coEvery { pinRepository.setupPin("old123") } returns Unit
 
-        enterPin("1234")
+        viewModel.onPasswordChanged("old123")
         viewModel.onSubmit() // move to confirm
-        enterPin("1234")
+        viewModel.onPasswordChanged("old123")
         viewModel.onSubmit() // confirm
 
         testDispatcher.scheduler.advanceUntilIdle()
 
-        coVerify { pinRepository.setupPin("1234") }
+        coVerify { pinRepository.setupPin("old123") }
         assertThat(viewModel.uiState.value.isComplete).isTrue()
     }
 
     @Test
     fun `confirm with non-matching pin shows error`() {
-        enterPin("1234")
+        viewModel.onPasswordChanged("old123")
         viewModel.onSubmit() // move to confirm
-        enterPin("5678")
+        viewModel.onPasswordChanged("new456")
         viewModel.onSubmit() // mismatched confirm
 
         assertThat(viewModel.uiState.value.error).isNotNull()
         assertThat(viewModel.uiState.value.step).isEqualTo(PinSetupStep.ENTER_NEW)
-    }
-
-    private fun enterPin(pin: String) {
-        pin.forEach { viewModel.onDigitEntered(it.digitToInt()) }
     }
 }
